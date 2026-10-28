@@ -47,3 +47,19 @@ python -m pip check
 - Policy comparison reports field-level differences for the two newest versions; it is not a legal or compliance interpretation.
 - Authentication, role-based access control, production-grade audit storage, and deployment hardening are not implemented.
 - Human authorization and review remain necessary before any real-world action. No real banking action is performed by this MVP.
+
+## Human Review Gate
+
+The `/research` workflow performs field verification on matching synthetic
+banking policies. When verification passes, the response includes
+`review_status: "pending_review"` to indicate that human review is still
+required.
+
+- `pending_review`: matching results passed field verification and await review.
+- `not_required`: no matching results were found, or review was not applicable.
+- Verification failures do not return results as verified.
+
+This is a portfolio demonstration status marker. It does not implement
+authenticated reviewer approval, persistent approval records, or real banking
+actions. All data is synthetic; human review is required before any real-world
+use.

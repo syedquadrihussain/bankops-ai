@@ -19,15 +19,11 @@ app = FastAPI(
 
 class ResearchRequest(BaseModel):
     question: str = Field(
-        ...,
-        min_length=1,
-        max_length=500,
+        ..., min_length=1, max_length=500,
         description="Question about synthetic banking policies",
     )
     limit: int = Field(
-        default=5,
-        ge=1,
-        le=20,
+        default=5, ge=1, le=20,
         description="Maximum number of policies to return",
     )
 
@@ -35,9 +31,7 @@ class ResearchRequest(BaseModel):
     @classmethod
     def question_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError(
-                "Question must not be empty or whitespace."
-            )
+            raise ValueError("Question must not be empty or whitespace.")
         return value.strip()
 
 
@@ -53,16 +47,12 @@ def health_check():
 @app.get("/policies")
 def list_policies():
     policies = policy_store.load_policies()
-    return {
-        "count": len(policies),
-        "policies": policies,
-    }
+    return {"count": len(policies), "policies": policies}
 
 
 @app.get("/policies/{policy_id}/compare")
 def compare_policy_versions(policy_id: str):
     comparison = policy_store.compare_policy_versions(policy_id)
-
     if comparison is None:
         raise HTTPException(
             status_code=404,
@@ -71,59 +61,44 @@ def compare_policy_versions(policy_id: str):
                 "are required for comparison."
             ),
         )
-
     return comparison
 
 
 @app.get("/policies/{policy_id}")
 def read_policy(policy_id: str):
     policy = policy_store.get_policy(policy_id)
-
     if policy is None:
         raise HTTPException(
             status_code=404,
             detail=f"Policy '{policy_id}' not found",
         )
-
     return policy
 
 
 @app.get("/search")
 def search(
     q: str = Query(
-        ...,
-        min_length=1,
-        max_length=200,
+        ..., min_length=1, max_length=200,
         description="Keywords to search in synthetic policies",
     ),
     limit: int = Query(default=5, ge=1, le=20),
 ):
     results = policy_store.search_policies(q, limit=limit)
-
-    return {
-        "query": q,
-        "count": len(results),
-        "results": results,
-    }
+    return {"query": q, "count": len(results), "results": results}
 
 
 @app.post("/research")
 def research(request: ResearchRequest):
-    result = research_graph.invoke(
-        {
-            "question": request.question,
-            "limit": request.limit,
-        }
-    )
+    result = research_graph.invoke({
+        "question": request.question,
+        "limit": request.limit,
+    })
 
     status = result.get("status", "research_completed")
-    verification_status = result.get(
-        "verification_status",
-        "not_run",
-    )
+    verification_status = result.get("verification_status", "not_run")
+    review_status = result.get("review_status", "not_required")
     results = result.get("results", [])
 
-    # No matching policies is different from a verification failure.
     if status == "no_matching_policies" and not results:
         return {
             "question": request.question,
@@ -131,13 +106,11 @@ def research(request: ResearchRequest):
             "results": [],
             "status": "no_matching_policies",
             "verification_status": verification_status,
-            "message": (
-                "No matching policies were found. "
-                "Try different keywords."
-            ),
+            "review_status": "not_required",
+            "message": "No matching policies were found. Try different keywords.",
         }
 
-    # Fail closed: return research results only after verification passes.
+    # Fail closed: never return results as verified if verification fails.
     if verification_status != "passed":
         return {
             "question": request.question,
@@ -145,6 +118,7 @@ def research(request: ResearchRequest):
             "results": [],
             "status": "verification_failed",
             "verification_status": verification_status,
+            "review_status": "not_required",
             "message": (
                 "Research results could not be verified. "
                 "They have not been returned as verified results."
@@ -157,7 +131,9 @@ def research(request: ResearchRequest):
         "results": results,
         "status": status,
         "verification_status": verification_status,
+        "review_status": review_status,
         "message": (
-            "Matching policies were found and passed field verification."
+            "Matching policies passed field verification and are awaiting "
+            "human review. No approval or banking action has been performed."
         ),
     }

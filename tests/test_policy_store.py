@@ -3,7 +3,7 @@
 
 def test_load_policies():
     policies = load_policies()
-    assert len(policies) == 3
+    assert len(policies) == 4
 
 
 def test_get_existing_policy():

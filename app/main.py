@@ -1,8 +1,20 @@
 ﻿from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.policy_store import load_policies, get_policy, search_policies
+from app import policy_store
 from app.research_graph import research_graph
+
+
+app = FastAPI(
+    title="BankOps AI",
+    description=(
+        "A portfolio MVP demonstrating evidence-backed search over "
+        "synthetic banking policies, policy version comparison, and "
+        "a human-review-oriented research workflow. "
+        "Not for real banking or compliance decisions."
+    ),
+    version="0.2.0",
+)
 
 
 class ResearchRequest(BaseModel):
@@ -19,15 +31,14 @@ class ResearchRequest(BaseModel):
         description="Maximum number of policies to return",
     )
 
-
-app = FastAPI(
-    title="BankOps AI",
-    description=(
-        "A synthetic banking operations policy research API. "
-        "For demonstration only; not for real banking decisions."
-    ),
-    version="0.1.0",
-)
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError(
+                "Question must not be empty or whitespace."
+            )
+        return value.strip()
 
 
 @app.get("/health")
@@ -41,16 +52,32 @@ def health_check():
 
 @app.get("/policies")
 def list_policies():
-    policies = load_policies()
+    policies = policy_store.load_policies()
     return {
         "count": len(policies),
         "policies": policies,
     }
 
 
+@app.get("/policies/{policy_id}/compare")
+def compare_policy_versions(policy_id: str):
+    comparison = policy_store.compare_policy_versions(policy_id)
+
+    if comparison is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"At least two versions of policy '{policy_id}' "
+                "are required for comparison."
+            ),
+        )
+
+    return comparison
+
+
 @app.get("/policies/{policy_id}")
 def read_policy(policy_id: str):
-    policy = get_policy(policy_id)
+    policy = policy_store.get_policy(policy_id)
 
     if policy is None:
         raise HTTPException(
@@ -71,7 +98,7 @@ def search(
     ),
     limit: int = Query(default=5, ge=1, le=20),
 ):
-    results = search_policies(q, limit=limit)
+    results = policy_store.search_policies(q, limit=limit)
 
     return {
         "query": q,
@@ -82,27 +109,35 @@ def search(
 
 @app.post("/research")
 def research(request: ResearchRequest):
-    graph_result = research_graph.invoke(
+    result = research_graph.invoke(
         {
             "question": request.question,
             "limit": request.limit,
         }
     )
 
-    results = graph_result["results"]
-    status = graph_result["status"]
-    verification_status = graph_result["verification_status"]
+    status = result.get("status", "research_completed")
+    verification_status = result.get(
+        "verification_status",
+        "not_run",
+    )
+    results = result.get("results", [])
 
-    if status == "no_matching_policies":
+    # No matching policies is different from a verification failure.
+    if status == "no_matching_policies" and not results:
         return {
             "question": request.question,
             "count": 0,
             "results": [],
-            "status": status,
+            "status": "no_matching_policies",
             "verification_status": verification_status,
-            "message": "No matching policies were found. Try different keywords.",
+            "message": (
+                "No matching policies were found. "
+                "Try different keywords."
+            ),
         }
 
+    # Fail closed: return research results only after verification passes.
     if verification_status != "passed":
         return {
             "question": request.question,
@@ -122,5 +157,7 @@ def research(request: ResearchRequest):
         "results": results,
         "status": status,
         "verification_status": verification_status,
-        "message": "Matching policies were found and passed field verification.",
+        "message": (
+            "Matching policies were found and passed field verification."
+        ),
     }

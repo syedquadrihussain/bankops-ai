@@ -1,26 +1,34 @@
 ﻿[
-  {
-    "policy_id": "KYC-001",
-    "title": "Synthetic Customer Identity Verification Policy",
-    "version": "1.0",
-    "effective_date": "2026-01-01",
-    "category": "KYC",
-    "content": "For this synthetic exercise, verify identity using two approved identity evidence items before marking a customer verification case complete. If evidence is missing or inconsistent, mark the case for human review. Do not approve a case based only on an unsupported assertion."
-  },
-  {
-    "policy_id": "AML-001",
-    "title": "Synthetic Transaction Alert Review Policy",
-    "version": "1.0",
-    "effective_date": "2026-01-15",
-    "category": "AML",
-    "content": "For this synthetic exercise, record the alert reference, review the supplied transaction evidence, document the rationale, and escalate unresolved concerns to an authorized reviewer. An alert alone does not establish wrongdoing."
-  },
-  {
-    "policy_id": "DOC-001",
-    "title": "Synthetic Evidence Documentation Policy",
-    "version": "1.0",
-    "effective_date": "2026-02-01",
-    "category": "Documentation",
-    "content": "Every case summary must identify the evidence reviewed, cite available policy IDs, state missing information, and distinguish observed facts from assumptions. A human reviewer must approve consequential case decisions."
-  }
+    {
+        "policy_id":  "KYC-001",
+        "title":  "Synthetic Customer Identity Verification Policy",
+        "version":  "1.0",
+        "effective_date":  "2026-01-01",
+        "category":  "KYC",
+        "content":  "For this synthetic exercise, verify identity using two approved identity evidence items before marking a customer verification case complete. If evidence is missing or inconsistent, mark the case for human review. Do not approve a case based only on an unsupported assertion."
+    },
+    {
+        "policy_id":  "AML-001",
+        "title":  "Synthetic Transaction Alert Review Policy",
+        "version":  "1.0",
+        "effective_date":  "2026-01-15",
+        "category":  "AML",
+        "content":  "For this synthetic exercise, record the alert reference, review the supplied transaction evidence, document the rationale, and escalate unresolved concerns to an authorized reviewer. An alert alone does not establish wrongdoing."
+    },
+    {
+        "policy_id":  "DOC-001",
+        "title":  "Synthetic Evidence Documentation Policy",
+        "version":  "1.0",
+        "effective_date":  "2026-02-01",
+        "category":  "Documentation",
+        "content":  "Every case summary must identify the evidence reviewed, cite available policy IDs, state missing information, and distinguish observed facts from assumptions. A human reviewer must approve consequential case decisions."
+    },
+    {
+        "policy_id":  "KYC-001",
+        "title":  "Synthetic KYC Policy",
+        "version":  "2.0",
+        "effective_date":  "2026-06-01",
+        "category":  "KYC",
+        "content":  "For this synthetic demonstration, identity verification records must be reviewed against the approved evidence checklist. Record the review outcome and escalate unresolved mismatches for authorized human review. This policy is fictional and is not operational banking guidance."
+    }
 ]

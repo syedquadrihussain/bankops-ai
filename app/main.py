@@ -7,18 +7,19 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from app import policy_store
+from app.config import APP_NAME, APP_VERSION, APP_ENVIRONMENT
 from app.research_graph import research_graph
 
 
 app = FastAPI(
-    title="BankOps AI",
+    title=APP_NAME,
     description=(
         "A portfolio MVP demonstrating evidence-backed search over "
         "synthetic banking policies, policy version comparison, and "
         "an explicit human-review decision workflow. "
         "Not for real banking or compliance decisions."
     ),
-    version="0.3.0",
+    version=APP_VERSION,
 )
 
 
@@ -92,8 +93,8 @@ def public_review_record(record: dict) -> dict:
 def health_check():
     return {
         "status": "healthy",
-        "project": "BankOps AI",
-        "environment": "synthetic_demo",
+        "project": APP_NAME,
+        "environment": APP_ENVIRONMENT,
     }
 
 
@@ -106,6 +107,7 @@ def list_policies():
 @app.get("/policies/{policy_id}/compare")
 def compare_policy_versions(policy_id: str):
     comparison = policy_store.compare_policy_versions(policy_id)
+
     if comparison is None:
         raise HTTPException(
             status_code=404,
@@ -114,17 +116,20 @@ def compare_policy_versions(policy_id: str):
                 "are required for comparison."
             ),
         )
+
     return comparison
 
 
 @app.get("/policies/{policy_id}")
 def read_policy(policy_id: str):
     policy = policy_store.get_policy(policy_id)
+
     if policy is None:
         raise HTTPException(
             status_code=404,
             detail=f"Policy '{policy_id}' not found",
         )
+
     return policy
 
 
@@ -139,15 +144,22 @@ def search(
     limit: int = Query(default=5, ge=1, le=20),
 ):
     results = policy_store.search_policies(q, limit=limit)
-    return {"query": q, "count": len(results), "results": results}
+
+    return {
+        "query": q,
+        "count": len(results),
+        "results": results,
+    }
 
 
 @app.post("/research")
 def research(request: ResearchRequest):
-    result = research_graph.invoke({
-        "question": request.question,
-        "limit": request.limit,
-    })
+    result = research_graph.invoke(
+        {
+            "question": request.question,
+            "limit": request.limit,
+        }
+    )
 
     status = result.get("status", "research_completed")
     verification_status = result.get("verification_status", "not_run")
@@ -191,6 +203,7 @@ def research(request: ResearchRequest):
         }
 
     review_id = str(uuid4())
+
     record = {
         "review_id": review_id,
         "question": request.question,
@@ -223,18 +236,29 @@ def research(request: ResearchRequest):
 def get_review(review_id: str):
     with review_lock:
         record = review_records.get(review_id)
+
         if record is None:
-            raise HTTPException(status_code=404, detail="Review not found.")
+            raise HTTPException(
+                status_code=404,
+                detail="Review not found.",
+            )
+
         return public_review_record(record)
 
 
 @app.post("/reviews/{review_id}/decision")
-def decide_review(review_id: str, request: ReviewDecisionRequest):
+def decide_review(
+    review_id: str,
+    request: ReviewDecisionRequest,
+):
     with review_lock:
         record = review_records.get(review_id)
 
         if record is None:
-            raise HTTPException(status_code=404, detail="Review not found.")
+            raise HTTPException(
+                status_code=404,
+                detail="Review not found.",
+            )
 
         if record["review_status"] != "pending_review":
             raise HTTPException(
@@ -254,4 +278,5 @@ def decide_review(review_id: str, request: ReviewDecisionRequest):
     response["message"] = (
         "Review decision recorded. No banking action was executed."
     )
+
     return response

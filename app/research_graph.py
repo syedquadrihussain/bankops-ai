@@ -1,7 +1,9 @@
-﻿from typing import Any, TypedDict
+﻿@'
+from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from app.llm_client import get_llm
 from app.policy_store import search_policies
 
 
@@ -22,6 +24,8 @@ class ResearchState(TypedDict, total=False):
     status: str
     verification_status: str
     review_status: str
+    summaries: list[dict[str, Any]]
+    summary_status: str
 
 
 def supervisor_node(state: ResearchState) -> dict:
@@ -96,11 +100,33 @@ def human_review_node(state: ResearchState) -> dict:
     return {"review_status": "not_required"}
 
 
+def summarize_node(state: ResearchState) -> dict:
+    """Write AI summaries for verified results only."""
+    if state.get("verification_status") != "passed":
+        return {"summaries": [], "summary_status": "not_run"}
+
+    try:
+        llm = get_llm()
+        summaries = [
+            {
+                "policy_id": item["policy_id"],
+                "version": item["version"],
+                "summary": llm.summarize(item["content"]),
+            }
+            for item in state.get("results", [])
+        ]
+    except Exception:
+        return {"summaries": [], "summary_status": "unavailable"}
+
+    return {"summaries": summaries, "summary_status": "generated"}
+
+
 builder = StateGraph(ResearchState)
 builder.add_node("supervisor", supervisor_node)
 builder.add_node("research", research_node)
 builder.add_node("verification", verification_node)
 builder.add_node("human_review", human_review_node)
+builder.add_node("summarize", summarize_node)
 
 builder.add_edge(START, "supervisor")
 builder.add_conditional_edges(
@@ -114,6 +140,8 @@ builder.add_conditional_edges(
     route_after_verification,
     {"human_review": "human_review", "stop": END},
 )
-builder.add_edge("human_review", END)
+builder.add_edge("human_review", "summarize")
+builder.add_edge("summarize", END)
 
 research_graph = builder.compile()
+'@ | Set-Content -Path app\research_graph.py -Encoding utf8

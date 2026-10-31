@@ -4,7 +4,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
-from app import policy_store, review_store
+from app import auth, policy_store, review_store, users
 from app.config import APP_NAME, APP_VERSION, APP_ENVIRONMENT
 from app.research_graph import research_graph
 
@@ -273,3 +273,28 @@ def get_review_audit(review_id: str):
 
     events = review_store.get_audit_log(review_id)
     return {"review_id": review_id, "count": len(events), "events": events}
+
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=1, max_length=200)
+
+
+@app.post("/login")
+def login(request: LoginRequest):
+    user = users.authenticate(request.username, request.password)
+
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password.",
+        )
+
+    token = auth.create_access_token(user["username"], user["role"])
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": user["role"],
+        "expires_in_minutes": auth.TOKEN_MINUTES,
+    }

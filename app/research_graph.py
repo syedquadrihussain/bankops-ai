@@ -1,4 +1,3 @@
-﻿@'
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -144,4 +143,3 @@ builder.add_edge("human_review", "summarize")
 builder.add_edge("summarize", END)
 
 research_graph = builder.compile()
-'@ | Set-Content -Path app\research_graph.py -Encoding utf8

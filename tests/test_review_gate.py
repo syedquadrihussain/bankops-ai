@@ -1,20 +1,12 @@
-﻿import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, review_lock, review_records
+from app.main import app
 from app.research_graph import research_graph
 
 
 client = TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def clear_demo_review_records():
-    with review_lock:
-        review_records.clear()
-    yield
-    with review_lock:
-        review_records.clear()
 
 
 def create_pending_review():

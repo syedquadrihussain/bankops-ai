@@ -1,12 +1,10 @@
 ﻿from datetime import datetime, timezone
-from threading import Lock
 from typing import Literal
-from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
-from app import policy_store
+from app import policy_store, review_store
 from app.config import APP_NAME, APP_VERSION, APP_ENVIRONMENT
 from app.research_graph import research_graph
 
@@ -65,10 +63,7 @@ class ReviewDecisionRequest(BaseModel):
         return value.strip()
 
 
-# Process-local demonstration storage.
-# Records disappear when the application process restarts.
-review_records: dict[str, dict] = {}
-review_lock = Lock()
+# Review records are stored in SQLite (see app/review_store.py).
 
 
 def utc_now() -> str:
@@ -202,20 +197,7 @@ def research(request: ResearchRequest):
             "message": "No results are available for human review.",
         }
 
-    review_id = str(uuid4())
-
-    record = {
-        "review_id": review_id,
-        "question": request.question,
-        "results": results,
-        "review_status": "pending_review",
-        "created_at": utc_now(),
-        "decided_at": None,
-        "reviewer": None,
-    }
-
-    with review_lock:
-        review_records[review_id] = record
+    review_id = review_store.create_review(request.question, results)
 
     return {
         "question": request.question,
@@ -237,16 +219,15 @@ def research(request: ResearchRequest):
 
 @app.get("/reviews/{review_id}")
 def get_review(review_id: str):
-    with review_lock:
-        record = review_records.get(review_id)
+    record = review_store.get_review(review_id)
 
-        if record is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Review not found.",
-            )
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Review not found.",
+        )
 
-        return public_review_record(record)
+    return public_review_record(record)
 
 
 @app.post("/reviews/{review_id}/decision")
@@ -254,29 +235,25 @@ def decide_review(
     review_id: str,
     request: ReviewDecisionRequest,
 ):
-    with review_lock:
-        record = review_records.get(review_id)
+    outcome, record = review_store.decide_review(
+        review_id,
+        "approved" if request.decision == "approve" else "rejected",
+        request.reviewer,
+    )
 
-        if record is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Review not found.",
-            )
-
-        if record["review_status"] != "pending_review":
-            raise HTTPException(
-                status_code=409,
-                detail="This review already has a final decision.",
-            )
-
-        record["review_status"] = (
-            "approved" if request.decision == "approve" else "rejected"
+    if outcome == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail="Review not found.",
         )
-        record["reviewer"] = request.reviewer
-        record["decided_at"] = utc_now()
 
-        response = public_review_record(record)
+    if outcome == "already_decided":
+        raise HTTPException(
+            status_code=409,
+            detail="This review already has a final decision.",
+        )
 
+    response = public_review_record(record)
     response["decision"] = request.decision
     response["message"] = (
         "Review decision recorded. No banking action was executed."

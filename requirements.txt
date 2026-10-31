@@ -3,4 +3,5 @@ uvicorn[standard]
 pydantic
 pytest
 httpx
-langgraph==1.2.17langchain-ollama
+langgraph==1.2.17
+langchain-ollama

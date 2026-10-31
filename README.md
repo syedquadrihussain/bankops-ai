@@ -1,4 +1,4 @@
-﻿# BankOps AI
+# BankOps AI
 
 BankOps AI is a learning and portfolio MVP demonstrating an agent-first workflow for researching and verifying fictional banking policies, followed by a recorded human review decision.
 
@@ -11,6 +11,7 @@ BankOps AI is a learning and portfolio MVP demonstrating an agent-first workflow
 - Verification gating so results that fail verification are not presented as verified.
 - Basic validation of policy JSON records, required fields, and duplicate policy/version pairs.
 - A human review workflow that records approval or rejection decisions.
+- An optional AI summary step that runs only after verification passes, with a fail-safe if the model is unavailable.
 - Automated tests for the review workflow and other covered application behavior.
 
 ## Technology
@@ -18,6 +19,7 @@ BankOps AI is a learning and portfolio MVP demonstrating an agent-first workflow
 - Python
 - FastAPI and Pydantic
 - LangGraph
+- Ollama (local model, optional)
 - pytest
 
 ## Run locally
@@ -30,6 +32,18 @@ python -m uvicorn app.main:app --reload
 ```
 
 Open `http://127.0.0.1:8000/docs` for interactive API documentation.
+
+## Optional AI summaries
+
+By default the project uses a fake model, so tests and demos need no model and no API key. To try a local model:
+
+```powershell
+ollama pull qwen2.5:3b
+$env:LLM_PROVIDER = "ollama"
+python -m uvicorn app.main:app --reload
+```
+
+Summaries are generated only for results that passed verification. They are labeled AI-generated and returned beside the original policy fields, never instead of them. If the model is unavailable, the verified results are still returned. Small local models can leave out or change details, so always compare a summary with the policy text.
 
 ## API endpoints
 
@@ -80,7 +94,7 @@ python -m pytest -q
 python -m pip check
 ```
 
-The human-review implementation was manually exercised in Swagger, and the automated suite reported 39 passing tests at the time of the latest validation. Re-run the checks after any code or documentation changes.
+The human-review implementation was manually exercised in Swagger, and the automated suite reported 46 passing tests at the time of the latest validation. Re-run the checks after any code or documentation changes.
 
 ## Known limitations and future work
 
@@ -90,6 +104,7 @@ The human-review implementation was manually exercised in Swagger, and the autom
 - Production-grade audit persistence, deployment hardening, and multi-worker review storage are not implemented.
 - Prompt-injection defenses, a dedicated security evaluation suite, and a formal evaluation runner require further verification before being claimed as implemented.
 - A Streamlit interface and Docker packaging are not documented as completed features.
+- AI summaries are not automatically checked against the policy text; a small model can omit a rule.
 
 ## Safety
 

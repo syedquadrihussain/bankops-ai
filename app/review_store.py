@@ -17,7 +17,28 @@ CREATE TABLE IF NOT EXISTS reviews (
     created_at TEXT NOT NULL,
     decided_at TEXT,
     reviewer TEXT
-)
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    event TEXT NOT NULL,
+    review_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    detail TEXT
+);
+
+CREATE TRIGGER IF NOT EXISTS audit_log_no_update
+BEFORE UPDATE ON audit_log
+BEGIN
+    SELECT RAISE(ABORT, 'audit_log is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS audit_log_no_delete
+BEFORE DELETE ON audit_log
+BEGIN
+    SELECT RAISE(ABORT, 'audit_log is append-only');
+END;
 """
 
 
@@ -34,7 +55,7 @@ def _connection():
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute(SCHEMA)
+        conn.executescript(SCHEMA)
         yield conn
         conn.commit()
     except Exception:
@@ -42,6 +63,14 @@ def _connection():
         raise
     finally:
         conn.close()
+
+
+def _write_audit(conn, event: str, review_id: str, actor: str, detail=None):
+    conn.execute(
+        "INSERT INTO audit_log (created_at, event, review_id, actor, detail) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (utc_now(), event, review_id, actor, detail),
+    )
 
 
 def _row_to_record(row) -> dict:
@@ -64,6 +93,7 @@ def create_review(question: str, results: list) -> str:
             "review_status, created_at) VALUES (?, ?, ?, 'pending_review', ?)",
             (review_id, question, json.dumps(results), utc_now()),
         )
+        _write_audit(conn, "review_created", review_id, "system")
     return review_id
 
 
@@ -89,5 +119,20 @@ def decide_review(review_id: str, new_status: str, reviewer: str):
         if row is None:
             return "not_found", None
         if cursor.rowcount == 0:
+            _write_audit(
+                conn, "decision_refused", review_id, reviewer,
+                "review already decided",
+            )
             return "already_decided", None
+        _write_audit(conn, "review_" + new_status, review_id, reviewer)
         return "decided", _row_to_record(row)
+
+
+def get_audit_log(review_id: str) -> list:
+    with _connection() as conn:
+        rows = conn.execute(
+            "SELECT created_at, event, actor, detail FROM audit_log "
+            "WHERE review_id = ? ORDER BY id",
+            (review_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]

@@ -260,3 +260,16 @@ def decide_review(
     )
 
     return response
+
+
+
+@app.get("/reviews/{review_id}/audit")
+def get_review_audit(review_id: str):
+    if review_store.get_review(review_id) is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Review not found.",
+        )
+
+    events = review_store.get_audit_log(review_id)
+    return {"review_id": review_id, "count": len(events), "events": events}

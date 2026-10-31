@@ -26,3 +26,14 @@ class OllamaLLM(LLMClient):
         )
         reply = self.chat.invoke(prompt)
         return reply.content
+
+
+def get_llm() -> LLMClient:
+    import os
+
+    provider = os.getenv("LLM_PROVIDER", "fake").lower()
+    if provider == "ollama":
+        return OllamaLLM(model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"))
+    if provider == "fake":
+        return FakeLLM()
+    raise ValueError(f"Unknown LLM_PROVIDER: {provider}")

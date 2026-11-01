@@ -1,10 +1,17 @@
 from fastapi.testclient import TestClient
 
+from app import auth
 from app.main import app
 from app.research_graph import research_graph
 
 
 client = TestClient(app)
+client.headers.update(
+    {
+        "Authorization": "Bearer "
+        + auth.create_access_token("reviewer-demo", "reviewer")
+    }
+)
 
 
 
@@ -105,15 +112,6 @@ def test_invalid_decision_returns_422():
 
     review = client.get(f"/reviews/{pending['review_id']}")
     assert review.json()["review_status"] == "pending_review"
-
-
-def test_blank_reviewer_returns_422():
-    pending = create_pending_review()
-    response = client.post(
-        f"/reviews/{pending['review_id']}/decision",
-        json={"decision": "approve", "reviewer": "   "},
-    )
-    assert response.status_code == 422
 
 
 def test_review_cannot_be_decided_twice():

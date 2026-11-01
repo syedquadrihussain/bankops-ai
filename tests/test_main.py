@@ -1,10 +1,17 @@
 from fastapi.testclient import TestClient
 
+from app import auth
 from app.main import app
 import app.main as main_module
 
 
 client = TestClient(app)
+client.headers.update(
+    {
+        "Authorization": "Bearer "
+        + auth.create_access_token("reviewer-demo", "reviewer")
+    }
+)
 
 
 def test_research_finds_matching_policy():

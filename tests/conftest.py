@@ -1,4 +1,9 @@
-﻿import pytest
+import os
+
+import pytest
+
+# Tokens made when test files load must stay valid while tests run.
+os.environ["JWT_SECRET"] = "test-only-secret-" + "x" * 32
 
 
 @pytest.fixture(autouse=True)

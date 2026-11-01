@@ -1,12 +1,18 @@
-﻿import sqlite3
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import review_store
+from app import auth, review_store
 from app.main import app
 
 client = TestClient(app)
+client.headers.update(
+    {
+        "Authorization": "Bearer "
+        + auth.create_access_token("reviewer-demo", "reviewer")
+    }
+)
 RESULTS = [{"policy_id": "KYC-001", "version": "1.0"}]
 
 

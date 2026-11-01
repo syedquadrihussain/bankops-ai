@@ -85,7 +85,7 @@ def _row_to_record(row) -> dict:
     }
 
 
-def create_review(question: str, results: list) -> str:
+def create_review(question: str, results: list, created_by: str = "system") -> str:
     review_id = str(uuid4())
     with _connection() as conn:
         conn.execute(
@@ -93,7 +93,7 @@ def create_review(question: str, results: list) -> str:
             "review_status, created_at) VALUES (?, ?, ?, 'pending_review', ?)",
             (review_id, question, json.dumps(results), utc_now()),
         )
-        _write_audit(conn, "review_created", review_id, "system")
+        _write_audit(conn, "review_created", review_id, created_by)
     return review_id
 
 

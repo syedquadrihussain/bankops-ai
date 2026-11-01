@@ -1,10 +1,10 @@
 ﻿from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
-from app import auth, policy_store, review_store, users
+from app import auth, deps, policy_store, review_store, users
 from app.config import APP_NAME, APP_VERSION, APP_ENVIRONMENT
 from app.research_graph import research_graph
 
@@ -48,19 +48,6 @@ class ReviewDecisionRequest(BaseModel):
         ...,
         description="Explicit human review decision",
     )
-    reviewer: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Reviewer identifier for this demo",
-    )
-
-    @field_validator("reviewer")
-    @classmethod
-    def reviewer_must_not_be_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("Reviewer must not be empty or whitespace.")
-        return value.strip()
 
 
 # Review records are stored in SQLite (see app/review_store.py).
@@ -148,7 +135,10 @@ def search(
 
 
 @app.post("/research")
-def research(request: ResearchRequest):
+def research(
+    request: ResearchRequest,
+    user: dict = Depends(deps.require_role("analyst", "reviewer")),
+):
     result = research_graph.invoke(
         {
             "question": request.question,
@@ -197,7 +187,9 @@ def research(request: ResearchRequest):
             "message": "No results are available for human review.",
         }
 
-    review_id = review_store.create_review(request.question, results)
+    review_id = review_store.create_review(
+        request.question, results, created_by=user["username"]
+    )
 
     return {
         "question": request.question,
@@ -218,7 +210,10 @@ def research(request: ResearchRequest):
 
 
 @app.get("/reviews/{review_id}")
-def get_review(review_id: str):
+def get_review(
+    review_id: str,
+    user: dict = Depends(deps.require_role("analyst", "reviewer")),
+):
     record = review_store.get_review(review_id)
 
     if record is None:
@@ -234,11 +229,12 @@ def get_review(review_id: str):
 def decide_review(
     review_id: str,
     request: ReviewDecisionRequest,
+    user: dict = Depends(deps.require_role("reviewer")),
 ):
     outcome, record = review_store.decide_review(
         review_id,
         "approved" if request.decision == "approve" else "rejected",
-        request.reviewer,
+        user["username"],
     )
 
     if outcome == "not_found":
@@ -264,7 +260,10 @@ def decide_review(
 
 
 @app.get("/reviews/{review_id}/audit")
-def get_review_audit(review_id: str):
+def get_review_audit(
+    review_id: str,
+    user: dict = Depends(deps.require_role("analyst", "reviewer")),
+):
     if review_store.get_review(review_id) is None:
         raise HTTPException(
             status_code=404,

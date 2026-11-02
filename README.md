@@ -15,6 +15,7 @@ BankOps AI is a learning and portfolio MVP demonstrating an agent-first workflow
 - An optional AI summary step that runs only after verification passes, with a fail-safe if the model is unavailable.
 - A read-only, tool-using agent (`POST /agent/ask`) with a step limit, filtering of suspected prompt injection in tool results, and a full audit trail.
 - An evaluation runner (`python -m app.evaluate`) that checks safety and behavior cases and prints a score.
+- Docker and Docker Compose packaging for running the app in a container.
 - Automated tests for the review workflow and other covered application behavior.
 
 ## Technology
@@ -27,6 +28,7 @@ BankOps AI is a learning and portfolio MVP demonstrating an agent-first workflow
 - SQLite
 - PyJWT and scrypt password hashing
 - pytest
+- Docker and Docker Compose
 
 ## Run locally
 
@@ -38,6 +40,25 @@ python -m uvicorn app.main:app --reload
 ```
 
 Open `http://127.0.0.1:8000/docs` for interactive API documentation.
+
+## Run with Docker
+
+Set a secret of 32 or more characters, then start the app:
+
+```powershell
+$env:JWT_SECRET = python -c "import secrets; print(secrets.token_urlsafe(48))"
+docker compose up --build
+```
+
+Open `http://127.0.0.1:8000/docs`. Data is kept in a Docker volume, and the container runs as a non-root user.
+
+The database starts empty, so create a user before logging in. In a second terminal, run:
+
+```powershell
+docker compose exec bankops python -m app.manage_users
+```
+
+The container does not include Ollama. By default it uses the fake model, so AI summaries are placeholders and `POST /agent/ask` returns 503. This is a demonstration setup, not production hardening.
 
 ## Optional AI summaries
 
@@ -113,7 +134,7 @@ python -m pytest -q
 python -m pip check
 ```
 
-The human-review implementation was manually exercised in Swagger, and the automated suite reported 123 passing tests at the time of the latest validation. Re-run the checks after any code or documentation changes.
+The human-review implementation was manually exercised in Swagger, and the automated suite reported 126 passing tests at the time of the latest validation. Re-run the checks after any code or documentation changes.
 
 ## Read-only agent
 
@@ -121,7 +142,7 @@ The human-review implementation was manually exercised in Swagger, and the autom
 
 ## Evaluation
 
-Run `python -m app.evaluate` to check 28 safety and behavior cases with no model needed. A test requires a perfect score, so a change that breaks one of these checks fails the build. Last result:
+Run `python -m app.evaluate` to check 28 safety and behavior cases with no model needed. A test requires a perfect score, so a change that breaks one of these checks fails the test suite. Last result:
 
 | Category | Passed | Total |
 | --- | --- | --- |
@@ -141,7 +162,7 @@ A perfect score means these checks pass. It does not prove the system is safe. `
 - Production authentication (an identity provider, login lockout, rate limits) and document-level authorization are not implemented. The policy list, policy lookup, search and compare endpoints are public because the data is synthetic.
 - Tamper-resistant audit storage, deployment hardening, and multi-server review storage are not implemented.
 - The prompt-injection filter is a keyword heuristic and is not complete. The evaluation covers the cases listed above and does not prove safety.
-- A Streamlit interface and Docker packaging are not documented as completed features.
+- A Streamlit interface is not implemented.
 - AI summaries are not automatically checked against the policy text; a small model can omit a rule.
 
 ## Safety

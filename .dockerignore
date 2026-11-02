@@ -1,0 +1,15 @@
+.git
+.venv
+BankOpsAI_New
+__pycache__
+*.pyc
+.pytest_cache
+.env
+.env.*
+*.db
+*.bak
+*.zip
+*.ps1
+tests
+try_langchain_ollama.py
+README.md

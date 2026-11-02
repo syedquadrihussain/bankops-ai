@@ -1,0 +1,14 @@
+services:
+  bankops:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (32 or more characters) before starting}
+      BANKOPS_DB: /db/bankops.db
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+    volumes:
+      - bankops-db:/db
+
+volumes:
+  bankops-db:

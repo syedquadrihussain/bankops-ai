@@ -1,10 +1,11 @@
-﻿from datetime import datetime, timezone
+﻿import os
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
-from app import auth, deps, policy_store, review_store, users
+from app import agent_graph, auth, deps, policy_store, review_store, users
 from app.config import APP_NAME, APP_VERSION, APP_ENVIRONMENT
 from app.research_graph import research_graph
 
@@ -296,4 +297,52 @@ def login(request: LoginRequest):
         "token_type": "bearer",
         "role": user["role"],
         "expires_in_minutes": auth.TOKEN_MINUTES,
+    }
+
+
+class AgentRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Question must not be empty or whitespace.")
+        return value.strip()
+
+
+@app.post("/agent/ask")
+def agent_ask(
+    request: AgentRequest,
+    user: dict = Depends(deps.require_role("analyst", "reviewer")),
+):
+    if os.getenv("LLM_PROVIDER", "fake").lower() != "ollama":
+        raise HTTPException(
+            status_code=503,
+            detail="The agent needs a real model. Set LLM_PROVIDER=ollama.",
+        )
+
+    try:
+        result = agent_graph.run_agent(request.question)
+    except Exception:
+        review_store.log_agent_run(
+            user["username"], request.question, [], "model_error"
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="The model could not complete the request.",
+        )
+
+    run_id = review_store.log_agent_run(
+        user["username"],
+        request.question,
+        result["tool_calls"],
+        result["status"],
+    )
+    return {
+        "run_id": run_id,
+        "status": result["status"],
+        "answer": result["answer"],
+        "tool_calls": result["tool_calls"],
+        "ai_note": "AI-generated text. Check it against the policy text.",
     }

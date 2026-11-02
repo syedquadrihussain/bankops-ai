@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -136,3 +136,14 @@ def get_audit_log(review_id: str) -> list:
             (review_id,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def log_agent_run(actor: str, question: str, tool_calls: list, status: str) -> str:
+    """Write one audit entry per agent step, in a single transaction."""
+    run_id = "agent-" + str(uuid4())
+    with _connection() as conn:
+        _write_audit(conn, "agent_question", run_id, actor, question[:200])
+        for call in tool_calls:
+            _write_audit(conn, "agent_tool_call", run_id, actor, json.dumps(call))
+        _write_audit(conn, "agent_run_finished", run_id, actor, status)
+    return run_id

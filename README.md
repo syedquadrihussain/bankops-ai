@@ -13,6 +13,8 @@ BankOps AI is a learning and portfolio MVP demonstrating an agent-first workflow
 - A human review workflow that records approval or rejection decisions.
 - Review records and an append-only audit log stored in SQLite.
 - An optional AI summary step that runs only after verification passes, with a fail-safe if the model is unavailable.
+- A read-only, tool-using agent (`POST /agent/ask`) with a step limit, filtering of suspected prompt injection in tool results, and a full audit trail.
+- An evaluation runner (`python -m app.evaluate`) that checks safety and behavior cases and prints a score.
 - Automated tests for the review workflow and other covered application behavior.
 
 ## Technology
@@ -20,6 +22,7 @@ BankOps AI is a learning and portfolio MVP demonstrating an agent-first workflow
 - Python
 - FastAPI and Pydantic
 - LangGraph
+- LangChain (prompt templates and structured output)
 - Ollama (local model, optional)
 - SQLite
 - PyJWT and scrypt password hashing
@@ -74,6 +77,7 @@ Log in with `POST /login`, then send the token as `Authorization: Bearer <token>
 | GET | `/reviews/{review_id}` | Retrieve a review record |
 | POST | `/reviews/{review_id}/decision` | Record an approval or rejection |
 | GET | `/reviews/{review_id}/audit` | List audit events for a review |
+| POST | `/agent/ask` | Ask a read-only tool-using agent about the policies (needs `LLM_PROVIDER=ollama`) |
 
 ## Human review workflow
 
@@ -109,7 +113,26 @@ python -m pytest -q
 python -m pip check
 ```
 
-The human-review implementation was manually exercised in Swagger, and the automated suite reported 88 passing tests at the time of the latest validation. Re-run the checks after any code or documentation changes.
+The human-review implementation was manually exercised in Swagger, and the automated suite reported 123 passing tests at the time of the latest validation. Re-run the checks after any code or documentation changes.
+
+## Read-only agent
+
+`POST /agent/ask` (needs a login, and `LLM_PROVIDER=ollama`) lets a local model choose among three read-only tools: policy search, policy lookup and version comparison. The step limit is fixed on the server. Tool results are cut at 4,000 characters and checked for suspected hidden instructions. Every question, tool call and result status is saved to the audit log. The agent cannot approve or change anything. Small local models sometimes pick the wrong tool or add their own opinions, so check every answer against the policy text.
+
+## Evaluation
+
+Run `python -m app.evaluate` to check 28 safety and behavior cases with no model needed. A test requires a perfect score, so a change that breaks one of these checks fails the build. Last result:
+
+| Category | Passed | Total |
+| --- | --- | --- |
+| Verification gate | 7 | 7 |
+| Injection filter | 9 | 9 |
+| Access control | 6 | 6 |
+| Agent safety | 3 | 3 |
+| Audit log | 3 | 3 |
+| **Overall** | **28** | **28** |
+
+A perfect score means these checks pass. It does not prove the system is safe. `python -m app.evaluate --with-model` adds two optional cases that need Ollama, and a small local model can fail them. The prompt-injection filter is a keyword heuristic that catches common tricks, not all of them. The other protections are read-only tools, a step limit, human review and audit logging.
 
 ## Known limitations and future work
 
@@ -117,7 +140,7 @@ The human-review implementation was manually exercised in Swagger, and the autom
 - Policy comparison reports field-level differences; it is not legal or compliance interpretation.
 - Production authentication (an identity provider, login lockout, rate limits) and document-level authorization are not implemented. The policy list, policy lookup, search and compare endpoints are public because the data is synthetic.
 - Tamper-resistant audit storage, deployment hardening, and multi-server review storage are not implemented.
-- Prompt-injection defenses, a dedicated security evaluation suite, and a formal evaluation runner require further verification before being claimed as implemented.
+- The prompt-injection filter is a keyword heuristic and is not complete. The evaluation covers the cases listed above and does not prove safety.
 - A Streamlit interface and Docker packaging are not documented as completed features.
 - AI summaries are not automatically checked against the policy text; a small model can omit a rule.
 

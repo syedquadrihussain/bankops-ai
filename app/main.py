@@ -333,16 +333,19 @@ def agent_ask(
             detail="The model could not complete the request.",
         )
 
+    flagged = result.get("flagged", 0)
     run_id = review_store.log_agent_run(
         user["username"],
         request.question,
         result["tool_calls"],
         result["status"],
+        flagged,
     )
     return {
         "run_id": run_id,
         "status": result["status"],
         "answer": result["answer"],
         "tool_calls": result["tool_calls"],
+        "flagged": flagged,
         "ai_note": "AI-generated text. Check it against the policy text.",
     }

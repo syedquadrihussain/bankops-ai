@@ -138,12 +138,22 @@ def get_audit_log(review_id: str) -> list:
     return [dict(row) for row in rows]
 
 
-def log_agent_run(actor: str, question: str, tool_calls: list, status: str) -> str:
+def log_agent_run(
+    actor: str, question: str, tool_calls: list, status: str, flagged: int = 0
+) -> str:
     """Write one audit entry per agent step, in a single transaction."""
     run_id = "agent-" + str(uuid4())
     with _connection() as conn:
         _write_audit(conn, "agent_question", run_id, actor, question[:200])
         for call in tool_calls:
             _write_audit(conn, "agent_tool_call", run_id, actor, json.dumps(call))
+        if flagged:
+            _write_audit(
+                conn,
+                "agent_injection_flagged",
+                run_id,
+                actor,
+                f"{flagged} tool result(s) removed",
+            )
         _write_audit(conn, "agent_run_finished", run_id, actor, status)
     return run_id

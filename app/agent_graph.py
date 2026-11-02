@@ -1,10 +1,15 @@
 import os
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from app.agent_tools import TOOLS
+from app.agent_tools import INJECTION_WARNING, TOOLS
 
 SYSTEM_PROMPT = (
     "You answer questions about synthetic bank policies for a human reviewer. "
@@ -70,8 +75,13 @@ def run_agent(question: str, model=None, max_steps: int = 6) -> dict:
     ]
     last = messages[-1]
     limited = bool(last.additional_kwargs.get("step_limit"))
+    flagged = sum(
+        isinstance(m, ToolMessage) and INJECTION_WARNING["warning"] in str(m.content)
+        for m in messages
+    )
     return {
         "status": "step_limit_reached" if limited else "completed",
         "answer": "" if limited else str(last.content),
         "tool_calls": tool_calls,
+        "flagged": flagged,
     }

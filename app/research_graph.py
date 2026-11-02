@@ -106,14 +106,17 @@ def summarize_node(state: ResearchState) -> dict:
 
     try:
         llm = get_llm()
-        summaries = [
-            {
-                "policy_id": item["policy_id"],
-                "version": item["version"],
-                "summary": llm.summarize(item["content"]),
-            }
-            for item in state.get("results", [])
-        ]
+        summaries = []
+        for item in state.get("results", []):
+            result = llm.summarize_policy(item["content"])
+            summaries.append(
+                {
+                    "policy_id": item["policy_id"],
+                    "version": item["version"],
+                    "summary": result.summary,
+                    "key_rules": result.key_rules,
+                }
+            )
     except Exception:
         return {"summaries": [], "summary_status": "unavailable"}
 

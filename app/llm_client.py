@@ -1,4 +1,7 @@
-﻿from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod
+
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 
 class LLMClient(ABC):
@@ -12,20 +15,29 @@ class FakeLLM(LLMClient):
         return "FAKE SUMMARY: " + text[:50]
 
 
+SUMMARY_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You summarize synthetic bank policies for a human reviewer. "
+            "Use only the policy text. Write at most three short sentences. "
+            "Always keep any rule that says what must not be done.",
+        ),
+        ("human", "Policy text:\n{policy_text}"),
+    ]
+)
+
+
 class OllamaLLM(LLMClient):
     def __init__(self, model: str = "qwen2.5:3b", chat=None):
         if chat is None:
             from langchain_ollama import ChatOllama
+
             chat = ChatOllama(model=model, temperature=0)
-        self.chat = chat
+        self.chain = SUMMARY_PROMPT | chat | StrOutputParser()
 
     def summarize(self, text: str) -> str:
-        prompt = (
-            "Summarize this bank policy in two short sentences. "
-            "Use only the text below.\n\n" + text
-        )
-        reply = self.chat.invoke(prompt)
-        return reply.content
+        return self.chain.invoke({"policy_text": text})
 
 
 def get_llm() -> LLMClient:

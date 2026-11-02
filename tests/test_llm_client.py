@@ -1,4 +1,4 @@
-﻿from app.llm_client import FakeLLM
+from app.llm_client import FakeLLM
 
 
 def test_fake_llm_returns_summary():
@@ -7,16 +7,12 @@ def test_fake_llm_returns_summary():
     assert result.startswith("FAKE SUMMARY:")
 
 
-class StubChat:
-    def invoke(self, prompt):
-        class Reply:
-            content = "STUB REPLY"
-        return Reply()
-
-
 def test_ollama_llm_uses_chat_reply():
+    from langchain_core.language_models import FakeListChatModel
+
     from app.llm_client import OllamaLLM
-    llm = OllamaLLM(chat=StubChat())
+
+    llm = OllamaLLM(chat=FakeListChatModel(responses=["STUB REPLY"]))
     assert llm.summarize("Any policy text.") == "STUB REPLY"
 
 
@@ -34,3 +30,12 @@ def test_get_llm_rejects_unknown_provider(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "nope")
     with pytest.raises(ValueError):
         get_llm()
+
+
+def test_summary_prompt_keeps_policy_text_and_prohibition_rule():
+    from app.llm_client import SUMMARY_PROMPT
+
+    policy = "Do not approve unsupported claims. {x}"
+    messages = SUMMARY_PROMPT.format_messages(policy_text=policy)
+    assert policy in messages[1].content
+    assert "must not be done" in messages[0].content

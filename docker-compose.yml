@@ -7,6 +7,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (32 or more characters) before starting}
       BANKOPS_DB: /db/bankops.db
       LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
     volumes:
       - bankops-db:/db
 

@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 
 from langchain_core.output_parsers import StrOutputParser
@@ -65,12 +66,10 @@ STRUCTURED_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-class OllamaLLM(LLMClient):
-    def __init__(self, model: str = "qwen2.5:3b", chat=None, structured_chain=None):
-        if chat is None:
-            from langchain_ollama import ChatOllama
+class ChatModelLLM(LLMClient):
+    """Works with any LangChain chat model, local or hosted."""
 
-            chat = ChatOllama(model=model, temperature=0)
+    def __init__(self, chat, structured_chain=None):
         self._chat = chat
         self.chain = SUMMARY_PROMPT | chat | StrOutputParser()
         self._structured_chain = structured_chain
@@ -86,12 +85,39 @@ class OllamaLLM(LLMClient):
         return self._structured_chain.invoke({"policy_text": text})
 
 
-def get_llm() -> LLMClient:
-    import os
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 
+
+class OllamaLLM(ChatModelLLM):
+    """A local model through Ollama. Free, and the text stays on this computer."""
+
+    def __init__(self, model: str = "qwen2.5:3b", chat=None, structured_chain=None):
+        if chat is None:
+            from langchain_ollama import ChatOllama
+
+            chat = ChatOllama(model=model, temperature=0)
+        super().__init__(chat, structured_chain)
+
+
+class GroqLLM(ChatModelLLM):
+    """A hosted model on Groq. The policy text is sent to Groq: synthetic data only."""
+
+    def __init__(self, model: str = DEFAULT_GROQ_MODEL, chat=None, structured_chain=None):
+        if chat is None:
+            from langchain_groq import ChatGroq
+
+            chat = ChatGroq(model=model, temperature=0, max_retries=2, timeout=30)
+        super().__init__(chat, structured_chain)
+
+
+def get_llm() -> LLMClient:
     provider = os.getenv("LLM_PROVIDER", "fake").lower()
-    if provider == "ollama":
-        return OllamaLLM(model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"))
     if provider == "fake":
         return FakeLLM()
+    if provider == "ollama":
+        return OllamaLLM(model=os.getenv("OLLAMA_MODEL") or "qwen2.5:3b")
+    if provider == "groq":
+        if not os.getenv("GROQ_API_KEY"):
+            raise ValueError("GROQ_API_KEY is not set.")
+        return GroqLLM(model=os.getenv("GROQ_MODEL") or DEFAULT_GROQ_MODEL)
     raise ValueError(f"Unknown LLM_PROVIDER: {provider}")

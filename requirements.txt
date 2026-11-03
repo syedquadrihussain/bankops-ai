@@ -7,3 +7,4 @@ langgraph==1.2.17
 langchain-ollama
 PyJWT
 langchain-core
+langchain-groq

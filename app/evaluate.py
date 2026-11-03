@@ -124,6 +124,27 @@ def isolated_environment():
 
 
 @contextmanager
+def _provider(value):
+    previous = os.environ.get("LLM_PROVIDER")
+    if value is None:
+        os.environ.pop("LLM_PROVIDER", None)
+    else:
+        os.environ["LLM_PROVIDER"] = value
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("LLM_PROVIDER", None)
+        else:
+            os.environ["LLM_PROVIDER"] = previous
+
+
+def _with_provider(value, func):
+    with _provider(value):
+        return func()
+
+
+@contextmanager
 def _patched(obj, name, value):
     original = getattr(obj, name)
     setattr(obj, name, value)
@@ -270,14 +291,23 @@ def _l_refusal_logged():
     return "decision_refused" in events
 
 
-def _m_summary_keeps_rule():
-    from app.llm_client import OllamaLLM
+def _require_real_provider():
+    if os.environ.get("LLM_PROVIDER", "fake").lower() not in ("ollama", "groq"):
+        raise RuntimeError(
+            "Set LLM_PROVIDER to ollama or groq before using --with-model."
+        )
 
-    result = OllamaLLM().summarize_policy(KYC_TEXT)
+
+def _m_summary_keeps_rule():
+    from app.llm_client import get_llm
+
+    _require_real_provider()
+    result = get_llm().summarize_policy(KYC_TEXT)
     return any("not approve" in rule.lower() for rule in result.key_rules)
 
 
 def _m_agent_uses_a_tool():
+    _require_real_provider()
     result = agent_graph.run_agent("What does policy KYC-001 say about evidence?")
     names = {call["name"] for call in result["tool_calls"]}
     return result["status"] == "completed" and bool(
@@ -285,7 +315,7 @@ def _m_agent_uses_a_tool():
     )
 
 
-def _cases(include_model: bool) -> list:
+def _cases(include_model: bool, provider=None) -> list:
     cases = []
 
     def add(category, case_id, description, check):
@@ -328,15 +358,16 @@ def _cases(include_model: bool) -> list:
     add(AUDIT, "L3", "A refused second decision is logged", _l_refusal_logged)
 
     if include_model:
-        add(MODEL, "M1", "The model summary keeps the do-not-approve rule", _m_summary_keeps_rule)
-        add(MODEL, "M2", "The agent looks the policy up with a tool", _m_agent_uses_a_tool)
+        add(MODEL, "M1", "The model summary keeps the do-not-approve rule", lambda: _with_provider(provider, _m_summary_keeps_rule))
+        add(MODEL, "M2", "The agent looks the policy up with a tool", lambda: _with_provider(provider, _m_agent_uses_a_tool))
     return cases
 
 
 def run_cases(include_model: bool = False) -> list:
+    user_provider = os.environ.get("LLM_PROVIDER")
     results = []
     with isolated_environment():
-        for case in _cases(include_model):
+        for case in _cases(include_model, user_provider):
             try:
                 passed, error = bool(case.check()), ""
             except Exception as exc:

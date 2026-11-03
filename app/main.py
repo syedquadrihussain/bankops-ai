@@ -316,10 +316,10 @@ def agent_ask(
     request: AgentRequest,
     user: dict = Depends(deps.require_role("analyst", "reviewer")),
 ):
-    if os.getenv("LLM_PROVIDER", "fake").lower() != "ollama":
+    if os.getenv("LLM_PROVIDER", "fake").lower() not in ("ollama", "groq"):
         raise HTTPException(
             status_code=503,
-            detail="The agent needs a real model. Set LLM_PROVIDER=ollama.",
+            detail="The agent needs a real model. Set LLM_PROVIDER=ollama or groq.",
         )
 
     try:

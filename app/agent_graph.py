@@ -10,6 +10,7 @@ from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from app.agent_tools import INJECTION_WARNING, TOOLS
+from app.llm_client import DEFAULT_GROQ_MODEL
 
 SYSTEM_PROMPT = (
     "You answer questions about synthetic bank policies for a human reviewer. "
@@ -23,9 +24,22 @@ STEP_LIMIT_TEXT = "Step limit reached. No answer was produced."
 
 
 def default_model():
+    provider = os.getenv("LLM_PROVIDER", "fake").lower()
+    if provider == "groq":
+        if not os.getenv("GROQ_API_KEY"):
+            raise ValueError("GROQ_API_KEY is not set.")
+        from langchain_groq import ChatGroq
+
+        return ChatGroq(
+            model=os.getenv("GROQ_MODEL") or DEFAULT_GROQ_MODEL,
+            temperature=0,
+            max_retries=2,
+            timeout=30,
+        )
+
     from langchain_ollama import ChatOllama
 
-    return ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"), temperature=0)
+    return ChatOllama(model=os.getenv("OLLAMA_MODEL") or "qwen2.5:3b", temperature=0)
 
 
 def build_agent_graph(model, max_steps: int = 6):
